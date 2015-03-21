@@ -7,7 +7,6 @@ package crypto
 
 import (
 	"hash"
-	"io"
 	"strconv"
 )
 
