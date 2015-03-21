@@ -50,7 +50,7 @@ type ResumableHash interface {
 	// ResumableHash is a superset of hash.Hash
 	hash.Hash
 	// Len returns the number of bytes written to the Hash so far.
-	Len() int64
+	Len() uint64
 	// State returns a snapshot of the state of the Hash.
 	State() ([]byte, error)
 	// Restore resets the Hash to the given state.
