@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package crypto collects common cryptographic constants.
+// Package crypto is a Subset of the Go `crypto` Package with a Resumable Hash
 package crypto
 
 import (
