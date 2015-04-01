@@ -2,13 +2,15 @@ package sha256
 
 import (
 	"bytes"
+	stdlib "crypto"
 	"crypto/rand"
-	"github.com/jlhawn/go-crypto"
+	_ "crypto/sha256" // To register the stdlib sha224 and sha256 algs.
+	resumable "github.com/jlhawn/go-crypto"
 	"io"
 	"testing"
 )
 
-func compareResumableHash(t *testing.T, h crypto.Hash) {
+func compareResumableHash(t *testing.T, r resumable.Hash, h stdlib.Hash) {
 	// Read 3 Kilobytes of random data into a buffer.
 	buf := make([]byte, 3*1024)
 	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
@@ -16,40 +18,40 @@ func compareResumableHash(t *testing.T, h crypto.Hash) {
 	}
 
 	// Use two Hash objects to consume prefixes of the data. One will be
-	// snapshotted and resumed with each new chunk, the other will be reset
-	// from the beginning each time. The digests should be equal after each
-	// chunk is digested.
-	fullHasher := h.New()
-	chunkHasher := h.New()
+	// snapshotted and resumed with each additional byte, then both will write
+	// that byte. The digests should be equal after each byte is digested.
+	resumableHasher := r.New()
+	stdlibHasher := h.New()
 
-	for i := 0; i <= len(buf); i++ {
-		l := i - 1
-		if l < 0 {
-			l = 0
+	// First, assert that the initial distest is the same.
+	if !bytes.Equal(resumableHasher.Sum(nil), stdlibHasher.Sum(nil)) {
+		t.Fatalf("initial digests do not match: got %x, expected %x", resumableHasher.Sum(nil), stdlibHasher.Sum(nil))
+	}
+
+	multiWriter := io.MultiWriter(resumableHasher, stdlibHasher)
+
+	for i := 1; i <= len(buf); i++ {
+
+		// Write the next byte.
+		multiWriter.Write(buf[i-1 : i])
+
+		if !bytes.Equal(resumableHasher.Sum(nil), stdlibHasher.Sum(nil)) {
+			t.Fatalf("digests do not match: got %x, expected %x", resumableHasher.Sum(nil), stdlibHasher.Sum(nil))
 		}
 
-		chunkHasher.Write(buf[l:i])
-		fullHasher.Write(buf[:i])
-
-		if !bytes.Equal(chunkHasher.Sum(nil), fullHasher.Sum(nil)) {
-			t.Fatalf("digests do not match: got %x, expected %x", chunkHasher.Sum(nil), fullHasher.Sum(nil))
-		}
-
-		hashState, err := chunkHasher.State()
+		// Snapshot, reset, and restore the chunk hasher.
+		hashState, err := resumableHasher.State()
 		if err != nil {
 			t.Fatalf("unable to get state of hash function: %s", err)
 		}
-
-		chunkHasher.Reset()
-		fullHasher.Reset()
-
-		if err := chunkHasher.Restore(hashState); err != nil {
+		resumableHasher.Reset()
+		if err := resumableHasher.Restore(hashState); err != nil {
 			t.Fatalf("unable to restorte state of hash function: %s", err)
 		}
 	}
 }
 
 func TestResumable(t *testing.T) {
-	compareResumableHash(t, crypto.SHA224)
-	compareResumableHash(t, crypto.SHA256)
+	compareResumableHash(t, resumable.SHA224, stdlib.SHA224)
+	compareResumableHash(t, resumable.SHA256, stdlib.SHA256)
 }
